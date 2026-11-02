@@ -1,12 +1,42 @@
-import time, cv2, numpy as np, mediapipe as mp, pyttsx3
+import time, cv2, numpy as np, mediapipe as mp, pyttsx3, json, onnxruntime as ort
 
 STABLE_FRAMES = 5   # frames a letter must hold before it's accepted
 MIN_CONF = 0.7      # ignore low-confidence predictions
 GAP_FRAMES = 15     # frames with no hand = end of word
 
+# ----- Load Pre-trained model ----- #
+sess = ort.InferenceSession("mlp_asl.onnx", providers=["CPUExecutionProvider"])
+
+# Load class labels
+with open("mlp_classes.json") as f:
+    classes = json.load(f)
+
+def normalize(pts):
+    pts = pts - pts[0]
+
+    # Normalize based on hand size
+    scale = np.linalg.norm(pts[9]) or 1.0
+
+    return (pts / scale).reshape(1, -1).astype("float32")
+
 def predict(pts):
     """Swap in the real model. Input: (21, 3) landmark array. Output: (letter, confidence)."""
-    return None, 0.0
+    pts = normalize(pts)
+
+    # Pass landmarks to model
+    input_name = sess.get_inputs()[0].name
+    logits = sess.run(None, {input_name: pts})[0][0]
+
+    # Convert model outputs to probabilities
+    exp = np.exp(logits - np.max(logits))
+    probs = exp / np.sum(exp)
+
+    # Get predicted letter
+    idx = int(np.argmax(probs))
+    letter = classes[idx]
+    confidence = float(probs[idx])
+
+    return letter, confidence
 
 tts = pyttsx3.init()
 cap = cv2.VideoCapture(0)
@@ -26,6 +56,7 @@ while True:
         lm = res.multi_hand_landmarks[0]
         draw.draw_landmarks(frame, lm, mp.solutions.hands.HAND_CONNECTIONS)
         letter, conf = predict(np.array([[p.x, p.y, p.z] for p in lm.landmark]))
+        print(f"Predicted letter: {letter}, Confidence: {conf:.2f}")
     else:
         no_hand += 1
         if no_hand == GAP_FRAMES and text and not text.endswith(" "):
