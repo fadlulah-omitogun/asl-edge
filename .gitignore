@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Environments and editor settings
+asl-env/
+.venv/
+.vscode/
+
+# Data and media (store in shared Drive instead)
+data/
+*.mp4
+*.avi
+*.jpg
+*.png
+
+# OS files
+.DS_Store
+Thumbs.db
